@@ -1,12 +1,9 @@
 services:
   - type: web
-    name: spleeter-api        # Название сервиса на Render (можешь поменять)
+    name: analyze
     env: python
-    buildCommand: "pip install --no-cache-dir -r requirements.txt"
-    startCommand: "uvicorn main:app --host 0.0.0.0 --port 8000"
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port 8000
     envVars:
       - key: PYTHONUNBUFFERED
         value: "1"
-      # Добавь сюда свои переменные окружения, если нужно, например:
-      # - key: SOME_SECRET_KEY
-      #   value: "supersecret"
