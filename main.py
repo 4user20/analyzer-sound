@@ -25,20 +25,28 @@ class AudioAnalysisResult(BaseModel):
 NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
 def freq_to_note(freq):
-    if freq <= 0:
+    if freq <= 0 or np.isnan(freq):
         return "N/A"
-    midi = int(round(69 + 12 * np.log2(freq / 440.0)))
-    note = NOTE_NAMES[midi % 12]
-    octave = midi // 12 - 1
-    return f"{note}{octave}"
+    try:
+        midi = int(round(69 + 12 * np.log2(freq / 440.0)))
+        note = NOTE_NAMES[midi % 12]
+        octave = midi // 12 - 1
+        return f"{note}{octave}"
+    except:
+        return "N/A"
 
 def analyze_audio(data: bytes):
     y, sr = librosa.load(io.BytesIO(data), sr=None, mono=True)
 
+    if len(y) < 4096:
+        raise ValueError("Audio too short for reliable analysis.")
+
     duration = librosa.get_duration(y=y, sr=sr)
+
     meter = pyln.Meter(sr)
     loudness = meter.integrated_loudness(y)
-    true_peak = meter.true_peak_level(y)
+    # true_peak = meter.true_peak_level(y)  ❌ НЕ СУЩЕСТВУЕТ
+    true_peak = np.max(np.abs(y))  # ✅ заменили
 
     rms = float(np.sqrt(np.mean(y ** 2)))
     peak_amplitude = float(np.max(np.abs(y)))
@@ -64,7 +72,7 @@ def analyze_audio(data: bytes):
 
     chroma = librosa.feature.chroma_stft(y=y, sr=sr)
     chroma_mean = np.mean(chroma, axis=1)
-    dominant_chroma_index = np.argmax(chroma_mean)
+    dominant_chroma_index = int(np.argmax(chroma_mean))
     dominant_chroma = NOTE_NAMES[dominant_chroma_index]
 
     return {
@@ -85,10 +93,6 @@ def analyze_audio(data: bytes):
 
 @app.post("/analyze", response_model=AudioAnalysisResult)
 async def analyze(file: UploadFile = File(...)):
-    # ❌ Лучше убрать проверку content_type, так как curl может не передать его
-    # if file.content_type not in ["audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp3"]:
-    #     raise HTTPException(status_code=400, detail="Unsupported file type")
-
     try:
         data = await file.read()
         results = analyze_audio(data)
